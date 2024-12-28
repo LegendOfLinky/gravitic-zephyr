@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Advanced Orbital Mechanics Simulator</title>
+        <style>
+            body { margin: 0; overflow: hidden; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: monospace; }
+            #gameCanvas { position: absolute; top: 0; left: 0; }
+            #ui { position: fixed; top: 10px; left: 10px; color: white; z-index: 1; background: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 5px; }
+            #resetButton { position: fixed; top: 10px; right: 10px; padding: 10px 20px; background: #333; color: white; border: 1px solid #666; cursor: pointer; z-index: 1; border-radius: 5px; font-family: monospace; transition: background 0.2s; }
+            #resetButton:hover { background: #444; }
+            #controls { position: fixed; bottom: 10px; left: 10px; color: white; background: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 5px; font-family: monospace; }
+        </style>
+    </head>
+
+    <body>
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui">
+            Orbital Velocity: <span id="orbitalVelocity">0</span> m/s<br>
+            Altitude: <span id="altitude">0</span> km<br>
+            Orbital Period: <span id="orbitalPeriod">0</span> s<br>
+            Time Warp: <span id="timeWarp">1.00x</span><br>
+            Status: <span id="status">Flying</span>
+        </div>
+        <div id="controls">
+            Controls:<br>
+            "↑": Thrust<br>
+            "←" / "→": Rotate<br>
+            "[" / "]": Time Warp<br>
+            "T": Toggle View<br>
+            Mouse Wheel: Zoom
+        </div>
+        <button id="resetButton">Reset</button>
+
+        <script>
+            // Defines a utility object for math operations
+            const MathUtils = {
+                // 2D Vector class for handling coordinate operations
+                Vector2: class Vector2 {
+                    // Creates a new vector with optional x,y coordinates defaulting to 0
+                    constructor(x = 0, y = 0) {
+                        this.x = x;
+                        this.y = y;
+                    }
+
+                    // Returns a new vector that is the sum of this vector and vector v
+                    add(v) {
+                        return new Vector2(this.x + v.x, this.y + v.y);
+                    }
+
+                    // Returns a new vector that is the difference of this vector and vector v
+                    subtract(v) {
+                        return new Vector2(this.x - v.x, this.y - v.y);
+                    }
+
+                    // Returns a new vector that is this vector multiplied by a scalar value
+                    multiply(scalar) {
+                        return new Vector2(this.x * scalar, this.y * scalar);
+                    }
+
+                    // Calculates the length (magnitude) of this vector using Pythagorean theorem
+                    magnitude() {
+                        return Math.sqrt(this.x * this.x + this.y * this.y);
+                    }
+
+                    // Returns a new vector in the same direction but with magnitude of 1
+                    normalize() {
+                        const mag = this.magnitude();
+                        // If magnitude is 0, return zero vector to avoid division by zero
+                        if (mag === 0) {
+                            return new Vector2();
+                        }
+                        
+                        return this.multiply(1 / mag);
+                    }
+                }
+            };
+
+            // Camera class to handle view positioning and zoom
+            class Camera {
+                // Initialize camera at origin with default zoom settings
+                constructor() {
+                    this.x = 0;
+                    this.y = 0;
+                    this.zoom = 1;
+                    this.targetZoom = 1;
+                    this.zoomSpeed = 0.1;
+                }
+
+                // Moves camera to target position and smoothly interpolates zoom level
+                follow(target) {
+                    this.x = target.x;
+                    this.y = target.y;
+                    // Gradually adjusts current zoom towards target zoom
+                    this.zoom += (this.targetZoom - this.zoom) * this.zoomSpeed;
+                }
+            }
+
+            // UI Manager
+            class UIManager {
+                static updateOrbitalVelocity(value) {
+                    document.getElementById('orbitalVelocity').textContent = value.toFixed(2);
+                }
+
+                static updateSurfaceVelocity(value) {
+                    document.getElementById('surfaceVelocity').textContent = value.toFixed(2);
+                }
+
+                static updateAltitude(value) {
+                    document.getElementById('altitude').textContent = value.toFixed(2);
+                }
+
+                static updateOrbitalPeriod(value) {
+                    document.getElementById('orbitalPeriod').textContent = value.toFixed(1);
+                }
+
+                static updateTimeWarp(value) {
+                    document.getElementById('timeWarp').textContent = value.toFixed(2) + 'x';
+                }
+
+                static updateStatus(text) {
+                    document.getElementById('status').textContent = text;
+                }
+            }
+
+            // Input Manager
+            class InputManager {
+                constructor() {
+                    this.keys = {};
+                    this.setupEventListeners();
+                }
+
+                setupEventListeners() {
+                    document.addEventListener('keydown', (e) => {
+                        this.keys[e.key] = true;
+                    });
+                    document.addEventListener('keyup', (e) => {
+                        this.keys[e.key] = false;
+                    });
+                }
+
+                isKeyPressed(key) {
+                    return this.keys[key] || false;
+                }
+            }
+
+            // Static class handling game rendering operations
+            class RenderSystem {
+                // Draws a parallax scrolling starfield background
+                static drawStarfield(ctx, camera) {
+                    // Save current canvas state
+                    ctx.save();
+                
+                    // Set number of stars to render
+                    const numStars = 200;
+                
+                    // Set star color to white
+                    ctx.fillStyle = 'white';
+
+                    // Generate each star
+                    for (let i = 0; i < numStars; i++) {
+                        // Calculate x position with parallax effect based on camera position
+                        // Uses sine wave and modulo to create wrapping effect
+                        const x = ((Math.sin(i) * 10000 - camera.x * 0.1) % ctx.canvas.width + ctx.canvas.width) % ctx.canvas.width;
+                    
+                        // Calculate y position similarly using cosine wave
+                        const y = ((Math.cos(i) * 10000 - camera.y * 0.1) % ctx.canvas.height + ctx.canvas.height) % ctx.canvas.height;
+                    
+                        // 10% chance for a larger 2px star, otherwise 1px
+                        const size = Math.random() < 0.1 ? 2 : 1;
+                    
+                        // Draw the star as a rectangle
+                        ctx.fillRect(x, y, size, size);
+                    }
+
+                    // Restore canvas state
+                    ctx.restore();
+                }
+            }
+
+            // Class representing a planet or moon in the game
+            class CelestialBody {
+                // Initialize celestial body with position, size, mass and orbital properties
+                constructor(x, y, radius, mass, isOrbiting = false, gameCanvas) {
+                    this.x = x;
+                    this.y = y;
+                    this.radius = radius;
+                    this.mass = mass;
+                    // Calculate sphere of influence - larger for main planet (mass 8000)
+                    this.sphereOfInfluence = radius * (mass === 8000 ? 20 : 8);
+                    // Default reddish color for celestial bodies
+                    this.color = '#ff6b6b';
+                    // Orbital properties
+                    this.isOrbiting = isOrbiting;
+                    this.orbitalAngle = 0;
+                    this.orbitalSpeed = 0.00005;
+                    // Only set orbital radius if body is orbiting
+                    this.orbitalRadius = isOrbiting ? GameState.ORBIT_RADIUS : 0;
+                    // Center point of orbit
+                    this.centerX = gameCanvas.width/2;
+                    this.centerY = gameCanvas.height/2;
+                }
+
+                // Update position if body is in orbit
+                update(timeWarp) {
+                    if (this.isOrbiting) {
+                        // Increase orbital angle based on speed and time warp
+                        this.orbitalAngle += this.orbitalSpeed * timeWarp;
+                        // Calculate new position using circular motion
+                        this.x = this.centerX + Math.cos(this.orbitalAngle) * this.orbitalRadius;
+                        this.y = this.centerY + Math.sin(this.orbitalAngle) * this.orbitalRadius;
+                    }
+                }
+
+                // Render the celestial body
+                draw(ctx, camera) {
+                    // Convert world coordinates to screen coordinates
+                    const screenX = (this.x - camera.x) * camera.zoom + ctx.canvas.width/2;
+                    const screenY = (this.y - camera.y) * camera.zoom + ctx.canvas.height/2;
+
+                    // Create glowing effect using radial gradient
+                    const gradient = ctx.createRadialGradient(
+                        screenX, screenY, this.radius * camera.zoom * 0.5,
+                        screenX, screenY, this.radius * camera.zoom
+                    );
+                    
+                    gradient.addColorStop(0, this.color + '33'); // Semi-transparent inner
+                    gradient.addColorStop(1, this.color + '00'); // Transparent outer
+
+                    // Draw the glow
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, this.radius * camera.zoom, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Draw the planet's outline
+                    ctx.strokeStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, this.radius * camera.zoom, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // Optionally draw sphere of influence indicator
+                    if (GameState.showSphereOfInfluence) {
+                        ctx.setLineDash([5, 15]); // Dashed line pattern
+                        ctx.strokeStyle = this.color + '44'; // Semi-transparent
+                        ctx.beginPath();
+                        ctx.arc(screenX, screenY, this.sphereOfInfluence * camera.zoom, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.setLineDash([]); // Reset line style
+                    }
+                }
+
+                // Check if spacecraft has collided with this body
+                checkCollision(spacecraft) {
+                    // Calculate distance between body and spacecraft
+                    const dx = this.x - spacecraft.x;
+                    const dy = this.y - spacecraft.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    // Collision occurs if distance is less than body's radius
+                    return distance <= this.radius;
+                }
+            }
+
+
+            // Class representing the player's spacecraft
+            class Spacecraft {
+                // Initialize spacecraft with position and movement properties
+                constructor(x, y) {
+                    this.x = x;
+                    this.y = y;
+                    this.vx = 0;                    // Velocity X component
+                    this.vy = 0;                    // Velocity Y component
+                    this.rotation = 0;              // Current rotation angle
+                    this.thrustPower = 0.001;       // Engine power
+                    this.rotationSpeed = 0.03;      // Turn rate
+                    this.thrustHistory = [];        // Array tracking engine particles
+                    this.crashed = false;           // Crash state
+                }
+
+                // Update spacecraft physics and state
+                update(planets, timeWarp) {
+                    if (this.crashed) return;
+
+                    // Check gravitational influence of each planet
+                    for (const planet of planets) {
+                        // Check for collision with planet
+                        if (planet.checkCollision(this)) {
+                            this.crashed = true;
+                            UIManager.updateStatus('Crashed!');
+                            return;
+                        }
+
+                        // Calculate gravitational force
+                        const dx = planet.x - this.x;
+                        const dy = planet.y - this.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        const force = (planet.mass / (distance * distance)) * 0.01 * timeWarp;
+                        const angle = Math.atan2(dy, dx);
+                    
+                        // Apply gravitational acceleration
+                        this.vx += Math.cos(angle) * force;
+                        this.vy += Math.sin(angle) * force;
+                    }
+
+                    // Update position based on velocity
+                    this.x += this.vx * timeWarp;
+                    this.y += this.vy * timeWarp;
+
+                    // Calculate and display current velocity
+                    const orbitalVelocity = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                    UIManager.updateOrbitalVelocity(orbitalVelocity);
+
+                    // Find distance to nearest planet surface
+                    let closestDistance = Infinity;
+                    for (const planet of planets) {
+                        const dx = planet.x - this.x;
+                        const dy = planet.y - this.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy) - planet.radius;
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                        }
+                    }
+                    UIManager.updateAltitude(closestDistance);
+                }
+
+                // Add engine exhaust particle effect
+                addThrustParticle() {
+                    if (this.crashed) return;
+
+                    // Limit number of particles
+                    if (this.thrustHistory.length > 12) this.thrustHistory.shift();
+                
+                    // Calculate random variations for particle
+                    const randomSpeed = 2 + Math.random();
+                    const randomOffset = (Math.random() - 0.5) * 0.2;
+                
+                    // Add new particle with position, velocity and lifetime
+                    this.thrustHistory.push({
+                        x: this.x - Math.cos(this.rotation) * 7,
+                        y: this.y - Math.sin(this.rotation) * 7,
+                        vx: -Math.cos(this.rotation + randomOffset) * randomSpeed,
+                        vy: -Math.sin(this.rotation + randomOffset) * randomSpeed,
+                        life: 15,
+                        size: 2 + Math.random()
+                    });
+                }
+
+                // Render spacecraft and engine effects
+                draw(ctx, camera) {
+                    // Update and draw thrust particles
+                    this.thrustHistory.forEach(particle => {
+                        particle.x += particle.vx;
+                        particle.y += particle.vy;
+                    
+                        // Convert to screen coordinates
+                        const screenX = (particle.x - camera.x) * camera.zoom + ctx.canvas.width/2;
+                        const screenY = (particle.y - camera.y) * camera.zoom + ctx.canvas.height/2;
+                    
+                        // Fade out particle over time
+                        const opacity = particle.life / 15;
+                        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                        ctx.beginPath();
+                        ctx.arc(screenX, screenY, particle.size * camera.zoom, 0, Math.PI * 2);
+                        ctx.fill();
+                    
+                        particle.life -= 0.7;
+                    });
+
+                    // Remove dead particles
+                    this.thrustHistory = this.thrustHistory.filter(p => p.life > 0);
+
+                    // Draw spacecraft triangle
+                    const screenX = (this.x - camera.x) * camera.zoom + ctx.canvas.width/2;
+                    const screenY = (this.y - camera.y) * camera.zoom + ctx.canvas.height/2;
+
+                    ctx.save();
+                    ctx.translate(screenX, screenY);
+                    ctx.rotate(this.rotation);
+                
+                    // Change color to red if crashed
+                    ctx.strokeStyle = this.crashed ? 'red' : 'white';
+                    ctx.lineWidth = 2;
+                
+                    // Draw triangular spacecraft shape
+                    ctx.beginPath();
+                    ctx.moveTo(10 * camera.zoom, 0);
+                    ctx.lineTo(-5 * camera.zoom, 5 * camera.zoom);
+                    ctx.lineTo(-5 * camera.zoom, -5 * camera.zoom);
+                    ctx.closePath();
+                    ctx.stroke();
+
+                    // Add glow effect if not crashed
+                    if (!this.crashed) {
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.lineWidth = 4;
+                        ctx.stroke();
+                    }
+                    
+                    ctx.restore();
+                }
+            }
+
+            // Main game state and controller object
+            const GameState = {
+               showSphereOfInfluence: false,      // Toggle for showing gravitational influence zones
+               ORBIT_RADIUS: 1600,                // Standard orbital distance
+               timeWarp: 1.0,                     // Time acceleration factor
+
+                // Initialize game components and setup
+                init() {
+                    // Setup canvas and get drawing context
+                    this.canvas = document.getElementById('gameCanvas');
+                    this.ctx = this.canvas.getContext('2d');
+                    this.canvas.width = window.innerWidth;
+                    this.canvas.height = window.innerHeight;
+                    
+                    // Initialize core game systems
+                    this.inputManager = new InputManager();
+                    this.camera = new Camera();
+                    this.orbitPredictor = new OrbitPredictor();
+                    
+                    // Handle window resizing to maintain fullscreen
+                    window.addEventListener('resize', () => {
+                        this.canvas.width = window.innerWidth;
+                        this.canvas.height = window.innerHeight;
+                        this.ctx = this.canvas.getContext('2d'); // Context must be refreshed after resize
+                    });
+                    
+                    this.setupEventListeners();
+                    this.initializeGame();
+                },
+
+                // Setup input handling
+                setupEventListeners() {
+                    // Keyboard controls
+                    document.addEventListener('keydown', (e) => {
+                        // 'T' toggles sphere of influence display
+                        if (e.key === 't' || e.key === 'T') {
+                            this.showSphereOfInfluence = !this.showSphereOfInfluence;
+                        }
+                        // '[' decreases time warp
+                        if (e.key === '[' && this.timeWarp > 0.25) {
+                            this.timeWarp *= 0.5;
+                            UIManager.updateTimeWarp(this.timeWarp);
+                        }
+                        // ']' increases time warp
+                        if (e.key === ']' && this.timeWarp < 16.0) {
+                            this.timeWarp *= 2.0;
+                            UIManager.updateTimeWarp(this.timeWarp);
+                        }
+                    });
+
+                    // Mouse wheel controls camera zoom
+                    this.canvas.addEventListener('wheel', (e) => {
+                        e.preventDefault();
+                        this.camera.targetZoom *= e.deltaY > 0 ? 0.9 : 1.1;
+                        // Clamp zoom between 0.1 and 5
+                        this.camera.targetZoom = Math.max(0.1, Math.min(this.camera.targetZoom, 5));
+                    });
+
+                    // Reset button handler
+                    document.getElementById('resetButton').addEventListener('click', () => this.resetGame());
+                },
+
+                // Create and setup initial game state
+                initializeGame() {
+                    // Create main planet at center
+                    this.mainPlanet = new CelestialBody(this.canvas.width/2, this.canvas.height/2, 120, 8000, false, this.canvas);
+                    
+                    // Create orbiting planet
+                    this.planet = new CelestialBody(
+                        this.canvas.width/2 + this.ORBIT_RADIUS,
+                        this.canvas.height/2,
+                        40,
+                        2000,
+                        true,
+                        this.canvas
+                    );
+                    this.planet.color = '#4ecdc4';
+
+                    // Create player spacecraft
+                    this.spacecraft = new Spacecraft(this.canvas.width/2 + this.ORBIT_RADIUS, this.canvas.height/2 - 150);
+                    
+                    // Calculate stable orbital velocity for initial orbit
+                    const initialDistance = Math.sqrt(
+                        Math.pow(this.spacecraft.x - this.planet.x, 2) +
+                        Math.pow(this.spacecraft.y - this.planet.y, 2)
+                    );
+                    const orbitalVelocity = Math.sqrt((this.planet.mass * 0.01) / initialDistance);
+                    this.spacecraft.vx = orbitalVelocity;
+
+                    // Reset time settings
+                    this.timeWarp = 1.0;
+                    UIManager.updateTimeWarp(this.timeWarp);
+                    UIManager.updateStatus('Flying');
+                },
+
+                // Reset to initial game state
+                resetGame() {
+                    this.initializeGame();
+                },
+
+                // Update game logic
+                update() {
+                    if (!this.spacecraft.crashed) {
+                        // Handle spacecraft controls
+                        if (this.inputManager.isKeyPressed('ArrowLeft')) this.spacecraft.rotation -= this.spacecraft.rotationSpeed;
+                        if (this.inputManager.isKeyPressed('ArrowRight')) this.spacecraft.rotation += this.spacecraft.rotationSpeed;
+                        if (this.inputManager.isKeyPressed('ArrowUp')) {
+                            // Apply thrust in direction of rotation
+                            this.spacecraft.vx += Math.cos(this.spacecraft.rotation) * this.spacecraft.thrustPower * this.timeWarp;
+                            this.spacecraft.vy += Math.sin(this.spacecraft.rotation) * this.spacecraft.thrustPower * this.timeWarp;
+                            this.spacecraft.addThrustParticle();
+                        }
+                    }
+
+                    // Update game objects
+                    this.orbitPredictor.predict(this.spacecraft, [this.mainPlanet, this.planet], this.timeWarp);
+                    this.spacecraft.update([this.mainPlanet, this.planet], this.timeWarp);
+                    this.camera.follow(this.spacecraft);
+                },
+
+                // Render game frame
+                render() {
+                    const ctx = this.ctx;
+                    // Clear screen to black
+                    ctx.save();
+                    ctx.fillStyle = 'black';
+                    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    ctx.restore();
+
+                    // Render background
+                    ctx.save();
+                    RenderSystem.drawStarfield(ctx, this.camera);
+                    ctx.restore();
+
+                    // Render game objects
+                    ctx.save();
+                    this.mainPlanet.draw(ctx, this.camera);
+                    this.planet.update(this.timeWarp);
+                    this.planet.draw(ctx, this.camera);
+                    this.orbitPredictor.draw(ctx, this.camera);
+                    this.spacecraft.draw(ctx, this.camera);
+                    ctx.restore();
+                },
+
+                // Main game loop
+                gameLoop() {
+                    this.update();
+                    this.render();
+                    requestAnimationFrame(() => this.gameLoop());
+                }
+            };
+
+
+                
+            // Class responsible for predicting spacecraft orbital paths and identifying gravitational influences
+            class OrbitPredictor {
+                // Initialize predictor with default settings for accuracy and visualization
+                constructor() {
+                    // Array to store predicted future positions of spacecraft
+                    this.positions = [];
+                        
+                    // Current calculated orbital period in game units
+                    this.orbitalPeriod = 0;
+                        
+                    // Number of points to calculate per orbit
+                    // Higher values give smoother predictions but cost more performance
+                    this.predictionQuality = 2000;
+                        
+                    // Number of complete orbits to predict ahead
+                    // More orbits show longer-term behavior but require more calculation
+                    this.targetOrbits = 5;
+                        
+                    // Array to store points where spacecraft transitions between gravity wells
+                    // Used for visualizing sphere of influence changes
+                    this.transitionPoints = [];
+                }
+
+                // Determine which celestial body has the strongest gravitational influence at a given point
+                calculateDominantBody(x, y, planets) {
+                    // First check the smaller orbiting planet (moon/satellite)
+                    // It takes priority within its sphere of influence despite lower mass
+                    const smallPlanet = planets.find(p => p.isOrbiting);
+                    if (smallPlanet) {
+                        // Calculate distance to the orbiting body
+                        const dx = smallPlanet.x - x;
+                        const dy = smallPlanet.y - y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                        // If point is within sphere of influence, this body dominates
+                        // regardless of the main planet's pull
+                        if (distance <= smallPlanet.sphereOfInfluence) {
+                            return smallPlanet;
+                        }
+                    }
+
+                    // Then check the main non-orbiting planet (primary body)
+                    const mainPlanet = planets.find(p => !p.isOrbiting);
+                    if (mainPlanet) {
+                        // Calculate distance to the main body
+                        const dx = mainPlanet.x - x;
+                        const dy = mainPlanet.y - y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                        // If point is within main planet's sphere of influence,
+                        // it dominates (unless already in smaller body's SOI)
+                        if (distance <= mainPlanet.sphereOfInfluence) {
+                            return mainPlanet;
+                        }
+                    }
+
+                    // If not in any sphere of influence, find closest body
+                    // This is a fallback for edge cases and very distant points
+                    let closest = null;
+                    let minDistance = Infinity;
+                    
+                    // Check each planet and find the nearest one
+                    for (const planet of planets) {
+                        const dx = planet.x - x;
+                        const dy = planet.y - y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // Update closest if this planet is nearer than previous
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closest = planet;
+                        }
+                    }
+                        
+                    // Return the closest planet as dominant body
+                    // This ensures we always have a gravitational reference
+                    return closest;
+                }
+
+
+
+                    
+                // Calculate the orbital period of the spacecraft around a body using Kepler's Third Law
+                calculateOrbitalPeriod(spacecraft, planets) {
+                    // Find the planet with strongest gravitational influence on spacecraft
+                    let dominantPlanet = null;
+                    let strongestGravity = 0;
+                    
+                    // Check gravitational force from each planet
+                    for (const planet of planets) {
+                        // Calculate distance vector components
+                        const dx = planet.x - spacecraft.x;
+                        const dy = planet.y - spacecraft.y; 
+                        // Get total distance using Pythagorean theorem
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        // Calculate gravitational force using inverse square law
+                        const gravity = planet.mass / (distance * distance);
+                        
+                        // Update dominant planet if gravity is stronger
+                        if (gravity > strongestGravity) {
+                            strongestGravity = gravity;
+                            dominantPlanet = planet;
+                        }
+                    }
+
+                    // Return large period if no dominant body found (effectively straight path)
+                    if (!dominantPlanet) return 50000;
+
+                    // Calculate distance to dominant planet
+                    const dx = dominantPlanet.x - spacecraft.x;
+                    const dy = dominantPlanet.y - spacecraft.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Calculate orbital period using Kepler's Third Law: T = 2π√(r³/GM)
+                    // 0.01 factor adjusts mass to match game physics scale
+                    const period = 2 * Math.PI * Math.sqrt((distance * distance * distance) / (dominantPlanet.mass * 0.01));
+                    UIManager.updateOrbitalPeriod(period);
+                    return period;
+                }
+
+                // Predict future orbital path of spacecraft considering gravity from multiple bodies
+                predict(spacecraft, planets, timeWarp) {
+                    // Reset prediction arrays
+                    this.positions = [];
+                    this.transitionPoints = [];
+
+                    // Initialize prediction starting point with spacecraft's current state
+                    let predictX = spacecraft.x;
+                    let predictY = spacecraft.y;
+                    let predictVx = spacecraft.vx;
+                    let predictVy = spacecraft.vy;
+
+                    // Determine initial dominant gravitational influence
+                    let currentDominantBody = this.calculateDominantBody(predictX, predictY, planets);
+                    this.orbitalPeriod = this.calculateOrbitalPeriod(spacecraft, [currentDominantBody]);
+                    
+                    // Setup prediction parameters
+                    const stepsPerOrbit = this.predictionQuality;  // How many points to calculate per orbit
+                    const totalSteps = Math.floor(stepsPerOrbit * this.targetOrbits);  // Total prediction points
+                    const timeStep = timeWarp;  // Time increment per step
+                    let orbitCount = 0;  // Track completed orbits
+                    
+                    // Track orbital angle progression
+                    let lastAngle = Math.atan2(predictY - currentDominantBody.y, predictX - currentDominantBody.x);
+                    let angleAccumulator = 0;  // Accumulate angle change to detect complete orbits
+
+                    // Main prediction loop
+                    for (let i = 0; i < totalSteps && orbitCount < this.targetOrbits; i++) {
+                        // Reset force accumulation for this step
+                        let totalFx = 0;
+                        let totalFy = 0;
+
+                        // Calculate gravitational forces from all planets
+                        for (const planet of planets) {
+                            let planetX = planet.x;
+                            let planetY = planet.y;
+                            
+                            // If planet is orbiting, predict its future position
+                            if (planet.isOrbiting) {
+                                const futureAngle = planet.orbitalAngle + planet.orbitalSpeed * timeStep * i;
+                                planetX = planet.centerX + Math.cos(futureAngle) * planet.orbitalRadius;
+                                planetY = planet.centerY + Math.sin(futureAngle) * planet.orbitalRadius;
+                            }
+
+                            // Calculate distance to planet
+                            const dx = planetX - predictX;
+                            const dy = planetY - predictY;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            // Stop prediction if collision detected
+                            if (distance <= planet.radius) {
+                                return;
+                            }
+                            
+                            // Calculate gravitational force using Newton's law
+                            const force = (planet.mass / (distance * distance)) * 0.01 * timeStep;
+                            const angle = Math.atan2(dy, dx);
+                            
+                            // Add force components to total
+                            totalFx += Math.cos(angle) * force;
+                            totalFy += Math.sin(angle) * force;
+                        }
+
+                        // Update velocity based on gravitational forces
+                        predictVx += totalFx;
+                        predictVy += totalFy;
+                        // Update position based on velocity
+                        predictX += predictVx * timeStep;
+                        predictY += predictVy * timeStep;
+
+                        // Check for changes in dominant gravitational influence
+                        const newDominantBody = this.calculateDominantBody(predictX, predictY, planets);
+                        
+                        // Record transition points between gravity wells
+                        if (newDominantBody !== currentDominantBody) {
+                            this.transitionPoints.push({
+                                x: predictX,
+                                y: predictY,
+                                enteringBody: newDominantBody
+                            });
+                        }
+                        
+                        // Track orbital progress around current dominant body
+                        if (newDominantBody === currentDominantBody) {
+                            const newAngle = Math.atan2(predictY - currentDominantBody.y, predictX - currentDominantBody.x);
+                            // Calculate angle change, normalized to [-π, π]
+                            const angleDiff = ((newAngle - lastAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+                            angleAccumulator += angleDiff;
+                            // Check for completed orbit
+                            if (Math.abs(angleAccumulator) >= Math.PI * 2) {
+                                orbitCount++;
+                                angleAccumulator = 0;
+                            }
+                            lastAngle = newAngle;
+                        }
+
+                        // Handle transition to new dominant body
+                        if (newDominantBody !== currentDominantBody) {
+                            currentDominantBody = newDominantBody;
+                            // Recalculate orbital period for new dominant body
+                            this.orbitalPeriod = this.calculateOrbitalPeriod(
+                                { x: predictX, y: predictY, vx: predictVx, vy: predictVy },
+                                [currentDominantBody]
+                            );
+                            // Reset angle tracking for new orbit
+                            angleAccumulator = 0;
+                            lastAngle = Math.atan2(predictY - currentDominantBody.y, predictX - currentDominantBody.x);
+                        }
+
+                        // Calculate fade-out effect for distant predictions
+                        const opacity = Math.max(0.2, 1 - (orbitCount / this.targetOrbits));
+
+                        // Store predicted position
+                        this.positions.push({
+                            x: predictX,
+                            y: predictY,
+                            opacity: opacity,
+                            dominantBody: currentDominantBody
+                        });
+                    }
+                }
+
+                // Draw the predicted orbital path and transition points
+                draw(ctx, camera) {
+                    // Don't draw anything if we don't have at least 2 points for a line
+                    if (this.positions.length < 2) return;
+
+                    // Simple white orbit line when sphere of influence display is off
+                    if (!GameState.showSphereOfInfluence) {
+                        // Start a new path for the orbital prediction
+                        ctx.beginPath();
+                        // Set line style to white with thin width
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 1;
+
+                        // Draw line segments between predicted positions
+                        for (let i = 1; i < this.positions.length; i++) {
+                            const pos = this.positions[i];        // Current position
+                            const prevPos = this.positions[i - 1];  // Previous position
+
+                            // Convert world coordinates to screen coordinates using camera transform
+                            const screenX = (pos.x - camera.x) * camera.zoom + ctx.canvas.width/2;
+                            const screenY = (pos.y - camera.y) * camera.zoom + ctx.canvas.height/2;
+                            const prevScreenX = (prevPos.x - camera.x) * camera.zoom + ctx.canvas.width/2;
+                            const prevScreenY = (prevPos.y - camera.y) * camera.zoom + ctx.canvas.height/2;
+
+                            // For first point, move to position without drawing
+                            if (i === 1) {
+                                ctx.moveTo(prevScreenX, prevScreenY);
+                            }
+                            // Draw line to current point
+                            ctx.lineTo(screenX, screenY);
+                        }
+                        // Render the complete orbit line
+                        ctx.stroke();
+                    } 
+                    // Advanced display showing sphere of influence regions
+                    else {
+                        // Track current dominant body for color changes
+                        let currentDominantBody = null;
+                        ctx.lineWidth = 1;
+
+                        // Draw orbit segments colored by dominant gravitational influence
+                        for (let i = 1; i < this.positions.length; i++) {
+                            const pos = this.positions[i];
+                            const prevPos = this.positions[i - 1];
+
+                            // When dominant body changes, start new path segment with new color
+                            if (pos.dominantBody !== currentDominantBody) {
+                                // Finish previous path if exists
+                                if (currentDominantBody !== null) {
+                                    ctx.stroke();
+                                }
+                                // Update tracking and start new path
+                                currentDominantBody = pos.dominantBody;
+                                ctx.beginPath();
+                                // Use body's color (slightly transparent) or white if no body
+                                ctx.strokeStyle = currentDominantBody ? `${currentDominantBody.color}dd` : '#ffffffdd';
+                            }
+
+                            // Convert positions to screen coordinates
+                            const screenX = (pos.x - camera.x) * camera.zoom + ctx.canvas.width/2;
+                            const screenY = (pos.y - camera.y) * camera.zoom + ctx.canvas.height/2;
+                            const prevScreenX = (prevPos.x - camera.x) * camera.zoom + ctx.canvas.width/2;
+                            const prevScreenY = (prevPos.y - camera.y) * camera.zoom + ctx.canvas.height/2;
+
+                            // Start new line at first point or sphere of influence transition
+                            if (i === 1 || pos.dominantBody !== prevPos.dominantBody) {
+                                ctx.moveTo(prevScreenX, prevScreenY);
+                            }
+                            // Draw line to current point
+                            ctx.lineTo(screenX, screenY);
+                        }
+                        // Complete final path segment
+                        ctx.stroke();
+
+                        // Draw transition points where spacecraft changes dominant gravitational influence
+                        for (const point of this.transitionPoints) {
+                            // Convert transition point to screen coordinates
+                            const screenX = (point.x - camera.x) * camera.zoom + ctx.canvas.width/2;
+                            const screenY = (point.y - camera.y) * camera.zoom + ctx.canvas.height/2;
+
+                            // Draw circular marker at transition point
+                            ctx.beginPath();
+                            // Use entering body's color or white if no body
+                            ctx.fillStyle = point.enteringBody ? point.enteringBody.color : '#ffffff';
+                            // Draw 4px radius circle
+                            ctx.arc(screenX, screenY, 4, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                }
+            }
+
+            // Initialize and start the game
+            GameState.init();
+            GameState.gameLoop();
+        </script>
+    </body>
+</html>
