@@ -28,6 +28,7 @@ INSPERATION
 KNOWN ISSUES:
   * The spacecraft guide arc turns the color of the nearest planetary body when outside any sphere of influence; it should default to white.
   * After a collision, the spacecraft remains stationary instead of synchronizing with the orbit of the planetary body.
+  * Time-warp creates instabilities with the orbital guide arc. 
 
 IMPROVEMENT PATH:
   * Add additional planetary bodies.
