@@ -24,9 +24,13 @@ class CelestialBody {
     // Update position if body is in orbit
     update(timeWarp) {
         if (this.isOrbiting) {
-            // Increase orbital angle based on speed and time warp
-            this.orbitalAngle += this.orbitalSpeed * timeWarp;
-            // Calculate new position using circular motion
+            const baseTimeStep = 1/60;
+            const subSteps = Math.ceil(timeWarp / baseTimeStep);
+            
+            for (let i = 0; i < subSteps; i++) {
+                this.orbitalAngle += this.orbitalSpeed * baseTimeStep;
+            }
+            
             this.x = this.centerX + Math.cos(this.orbitalAngle) * this.orbitalRadius;
             this.y = this.centerY + Math.sin(this.orbitalAngle) * this.orbitalRadius;
         }
@@ -59,15 +63,13 @@ class CelestialBody {
         ctx.arc(screenX, screenY, this.radius * camera.zoom, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Optionally draw sphere of influence indicator
-        if (GameState.showSphereOfInfluence) {
-            ctx.setLineDash([5, 15]); // Dashed line pattern
-            ctx.strokeStyle = this.color + '44'; // Semi-transparent
-            ctx.beginPath();
-            ctx.arc(screenX, screenY, this.sphereOfInfluence * camera.zoom, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]); // Reset line style
-        }
+        // Sphere Of Influence View
+        ctx.setLineDash([5, 15]); // Dashed line pattern
+        ctx.strokeStyle = this.color + '44'; // Semi-transparent
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, this.sphereOfInfluence * camera.zoom, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset line style
     }
 
     // Check if spacecraft has collided with this body
