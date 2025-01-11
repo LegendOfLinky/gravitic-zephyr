@@ -20,7 +20,7 @@ Option 2: Play on GitHub Pages
   * The game will load in your browser. Simply follow the on-screen instructions to begin playing.
   * If you encounter any issues, ensure your browser supports HTML5 and JavaScript, or try refreshing the page.
 
-INSPERATION
+INSPIRATION
   * Kerbal Space Program: For its focus on realistic yet approachable orbital mechanics and space exploration gameplay.
   * Lunar Lander: The classic arcade game that emphasized precision and control during space landings.
   * Line-of-Sight Guidance Techniques for Manned Orbital Rendezvous by Buzz Aldrin: The fundamental principle of this PHD thesis still underpins modern orbital mechanics.
