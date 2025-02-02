@@ -328,4 +328,5 @@ class OrbitPredictor {
         }
     }
 }
+
 window.OrbitPredictor = OrbitPredictor;

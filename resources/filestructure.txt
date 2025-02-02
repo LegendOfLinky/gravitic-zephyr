@@ -19,6 +19,7 @@ gravitic-zephyr/
         ├── main.js                # Game initialization and loop
         ├── utils/
         │   ├── MathUtils.js       # Vector2 class and math operations
+        │   ├── TouchControls.js   # Mobile input handling
         │   └── InputManager.js    # Keyboard and mouse input handling
         ├── ui/
         │   └── UIManager.js       # UI updates and management
