@@ -2,7 +2,7 @@ class TouchControls {
     constructor() {
         // If it's not a desktop (no fine pointer control), treat it as needing touch controls
         this.isDesktop = window.matchMedia('(pointer: fine) and (hover: hover)').matches;
-        this.desktopEnabled = true;  // flag for optional desktop touch controls
+        this.desktopEnabled = false;  // flag for optional desktop touch controls
         
         // Initialize if it's NOT a desktop OR if desktop touch controls are enabled
         if (!this.isDesktop || this.desktopEnabled) {
