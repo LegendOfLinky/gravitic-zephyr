@@ -5,7 +5,6 @@ bugfix/  # Fix of specific bugs and issues
 docs/    # Creation or changes to documentation (instead of direct main merger)
 
 File Structure:
-
 gravitic-zephyr/
 ├── index.html                     # Main game page
 ├── README.md                      # Project README file
