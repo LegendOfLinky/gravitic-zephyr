@@ -1,0 +1,32 @@
+Pull Request Tags:
+release/ # Version state at release (combined with tags) 
+feature/ # Specific feature added to the codebase
+bugfix/  # Fix of specific bugs and issues
+docs/    # Creation or changes to documentation (instead of direct main merger)
+
+File Structure:
+gravitic-zephyr/
+├── index.html                     # Main game page
+├── README.md                      # Project README file
+├── LICENSE                        # Project license file
+├── .github/workflows/
+│   └── static.yml                 # GitHub Pages implementation 
+└── resources/
+    ├── filestructure.txt          # Current file
+    ├── styles/                    # Style file 
+    │   └── main.css               # Style file 
+    └── js/
+        ├── main.js                # Game initialization and loop
+        ├── utils/
+        │   ├── MathUtils.js       # Vector2 class and math operations
+        │   └── InputManager.js    # Keyboard and mouse input handling
+        ├── ui/
+        │   └── UIManager.js       # UI updates and management
+        ├── game/
+        │   ├── Camera.js          # Camera controls and viewport management
+        │   ├── GameState.js       # Main game state and controller
+        │   └── RenderStarfield.js # Background starfield rendering
+        └── entities/
+            ├── CelestialBody.js   # Planet and moon class
+            ├── Spacecraft.js      # Player spacecraft class
+            └── OrbitPredictor.js  # Orbital path prediction
