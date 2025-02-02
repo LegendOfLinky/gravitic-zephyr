@@ -1,15 +1,11 @@
 class TouchControls {
     constructor() {
-        // Check if device has touch capabilities and/or mobile viewport
-        this.isMobile = window.matchMedia("(max-width: 768px), (pointer: coarse)").matches || 
-            ('ontouchstart' in window) || 
-            (navigator.maxTouchPoints > 0);
-            
-        // Desktop flag - can be toggled
-        this.desktopEnabled = false;
+        // If it's not a desktop (no fine pointer control), treat it as needing touch controls
+        this.isDesktop = window.matchMedia('(pointer: fine) and (hover: hover)').matches;
+        this.desktopEnabled = true;  // flag for optional desktop touch controls
         
-        // Only initialize if on mobile or desktop controls are enabled
-        if (this.isMobile || this.desktopEnabled) {
+        // Initialize if it's NOT a desktop OR if desktop touch controls are enabled
+        if (!this.isDesktop || this.desktopEnabled) {
             this.init();
         }
     }

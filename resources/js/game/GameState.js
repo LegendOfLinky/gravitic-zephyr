@@ -17,8 +17,6 @@ const GameState = {
         this.orbitPredictor = new OrbitPredictor();
 
         this.touchControls = new TouchControls();
-        // Enable desktop controls if desired
-        this.touchControls.setDesktopEnabled(false); 
         
         // Handle window resizing to maintain fullscreen
         window.addEventListener('resize', () => {
