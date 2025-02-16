@@ -1,4 +1,4 @@
-class TouchControls {
+class TouchController {
     constructor() {
         // If it's not a desktop (no fine pointer control), treat it as needing touch controls
         this.isDesktop = window.matchMedia('(pointer: fine) and (hover: hover)').matches;
@@ -131,4 +131,4 @@ class TouchControls {
 }
 
 // Add to window object for global access
-window.TouchControls = TouchControls;
+window.TouchControls = TouchController;

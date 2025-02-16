@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
     <head>
         <title>Gravitic Zephyr</title>
         <link rel="stylesheet" href="resources/styles/main.css">
@@ -30,23 +30,24 @@
 
         <div class="scripts">
             <!-- Utils -->
+            <script src="resources/js/core/Config.js"></script>
             <script src="resources/js/utils/MathUtils.js"></script>
-            <script src="resources/js/utils/TouchControls.js"></script>
-            <script src="resources/js/utils/InputManager.js"></script>
-            
+            <script src="resources/js/input/TouchController.js"></script>
+            <script src="resources/js/input/InputManager.js"></script>
+
             <!-- UI -->
             <script src="resources/js/ui/UIManager.js"></script>
-            
+
             <!-- Game Core -->
-            <script src="resources/js/game/Camera.js"></script>
-            <script src="resources/js/game/GameState.js"></script>
-            <script src="resources/js/game/RenderStarfield.js"></script>
-            
+            <script src="resources/js/renderer/Camera.js"></script>
+            <script src="resources/js/core/game/GameState.js"></script>
+            <script src="resources/js/renderer/effects/RenderStarfield.js"></script>
+
             <!-- Entities -->
             <script src="resources/js/entities/CelestialBody.js"></script>
             <script src="resources/js/entities/Spacecraft.js"></script>
-            <script src="resources/js/entities/OrbitPredictor.js"></script>
-            
+            <script src="resources/js/physics/OrbitPredictor.js"></script>
+
             <!-- Main -->
             <script src="resources/js/main.js"></script>
         </div>
