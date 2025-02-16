@@ -13,7 +13,7 @@ Gravitic Zephyr combines arcade-style gameplay with realistic orbital physics, c
 ## How to Play
 
 ### Play Online
-Visit the game at https://legendoflinky.github.io/gravitic-zephyr/
+Visit the game at https://AmundsenZach.github.io/gravitic-zephyr/
 
 ### Play Locally
 1. Download or clone this repository
